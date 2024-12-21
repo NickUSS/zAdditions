@@ -3,7 +3,6 @@ package me.nicolas.zAdditions.items;
 import me.nicolas.zAdditions.utils.ItemUtils;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
 
