@@ -1,0 +1,19 @@
+name: zAdditions
+version: '1.0'
+main: me.nicolas.zAdditions.ZAdditions
+api-version: '1.21'
+authors: [ Emojiado ]
+commands:
+  trade:
+    description: Sistema de intercambio seguro entre jugadores
+    usage: /<command> <jugador>
+  chunkminer:
+    description: Obtiene un Chunk Miner
+    usage: /<command>
+permissions:
+  zadditions.chunkminer.give:
+    description: Permite obtener Chunk Miners
+    default: op
+  zadditions.chunkminer.place:
+    description: Permite colocar Chunk Miners
+    default: op
