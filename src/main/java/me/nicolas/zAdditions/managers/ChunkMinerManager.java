@@ -9,6 +9,7 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
@@ -40,15 +41,38 @@ public class ChunkMinerManager implements Listener {
             plugin.saveResource("miners.yml", false);
         }
         dataConfig = YamlConfiguration.loadConfiguration(dataFile);
-        dataConfig.set("globally-paused", isGloballyPaused);
+
         isGloballyPaused = dataConfig.getBoolean("globally-paused", false);
 
-        loadMiners();
+        if (dataConfig.contains("miners")) {
+            for (String key : dataConfig.getConfigurationSection("miners").getKeys(false)) {
+                try {
+                    String worldName = dataConfig.getString("miners." + key + ".world");
+                    World world = plugin.getServer().getWorld(worldName);
 
-        try {
-            dataConfig.save(dataFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Error al guardar los datos de los Chunk Miners: " + e.getMessage());
+                    if (world != null) {
+                        double x = dataConfig.getDouble("miners." + key + ".x");
+                        double y = dataConfig.getDouble("miners." + key + ".y");
+                        double z = dataConfig.getDouble("miners." + key + ".z");
+                        UUID ownerUUID = UUID.fromString(dataConfig.getString("miners." + key + ".owner"));
+                        Location location = new Location(world, x, y, z);
+
+                        if (location.getBlock().getType() == Material.BEACON) {
+                            ChunkMiner miner = new ChunkMiner(location, ownerUUID);
+                            miners.put(location, miner);
+                            minersPerWorld.merge(world, 1, Integer::sum);
+
+                            // Si está pausado globalmente, pausar el miner
+                            if (isGloballyPaused) {
+                                miner.pause();
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Error al cargar Chunk Miner: " + key);
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -65,22 +89,32 @@ public class ChunkMinerManager implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        // Reactivar los miners del jugador si no están pausados globalmente
         if (!isGloballyPaused) {
-            List<ChunkMiner> playerMiners = getMinersByOwner(player.getUniqueId());
-            for (ChunkMiner miner : playerMiners) {
-                miner.resume();
-            }
+            getMinersByOwner(player.getUniqueId()).forEach(ChunkMiner::resume);
         }
     }
 
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        getMinersByOwner(player.getUniqueId()).forEach(ChunkMiner::pause);
+    }
+
     public void pauseAllMiners() {
+        if (isGloballyPaused) {
+            throw new IllegalStateException("Los Chunk Miners ya están pausados.");
+        }
+
         isGloballyPaused = true;
         miners.values().forEach(ChunkMiner::pause);
         saveData();
     }
 
     public void resumeAllMiners() {
+        if (!isGloballyPaused) {
+            throw new IllegalStateException("Los Chunk Miners ya están activos.");
+        }
+
         isGloballyPaused = false;
         miners.values().forEach(miner -> {
             if (isOwnerOnline(miner.getOwnerUUID())) {
@@ -99,7 +133,6 @@ public class ChunkMinerManager implements Listener {
                 .filter(miner -> miner.getOwnerUUID().equals(ownerUUID))
                 .collect(Collectors.toList());
     }
-
 
     private void loadMiners() {
         // Primero limpiar cualquier holograma existente
@@ -150,8 +183,9 @@ public class ChunkMinerManager implements Listener {
 
     public void saveData() {
         dataConfig.set("miners", null);
-        int index = 0;
+        dataConfig.set("globally-paused", isGloballyPaused);
 
+        int index = 0;
         for (Map.Entry<Location, ChunkMiner> entry : miners.entrySet()) {
             Location loc = entry.getKey();
             ChunkMiner miner = entry.getValue();
@@ -162,7 +196,6 @@ public class ChunkMinerManager implements Listener {
             dataConfig.set(path + ".y", loc.getY());
             dataConfig.set(path + ".z", loc.getZ());
             dataConfig.set(path + ".owner", miner.getOwnerUUID().toString());
-            dataConfig.set(path + ".progress", miner.getProgress());
 
             index++;
         }
@@ -189,6 +222,20 @@ public class ChunkMinerManager implements Listener {
 
     public Collection<ChunkMiner> getAllMiners() {
         return new ArrayList<>(miners.values());
+    }
+
+    public boolean isGloballyPaused() {
+        return isGloballyPaused;
+    }
+
+    public int getActiveMinersCount() {
+        return (int) miners.values().stream()
+                .filter(miner -> !miner.isPaused())
+                .count();
+    }
+
+    public int getTotalMinersCount() {
+        return miners.size();
     }
 
     public void cleanupAllHolograms() {

@@ -36,6 +36,7 @@ public class ChunkMiner {
     private int animationFrame = 0;
     private int tickCounter = 0;
     private int currentPage = 0;
+    private boolean isPaused = false;
 
     private static final int STORAGE_SIZE = 54;
     private static final int MINING_TICKS = 10; // Medio segundo (10 ticks)
@@ -111,6 +112,23 @@ public class ChunkMiner {
         setupHologram();
         startMining();
         scheduleStorageOptimization();
+    }
+
+    public void pause() {
+        isPaused = true;
+        if (miningTask != null) {
+            miningTask.cancel();
+            miningTask = null;
+        }
+    }
+
+    public void resume() {
+        if (!isActive) return;
+
+        isPaused = false;
+        if (miningTask == null) {
+            startMining();
+        }
     }
 
     private void createNewStoragePage() {
@@ -299,8 +317,13 @@ public class ChunkMiner {
     }
 
     private void startMining() {
+        if (miningTask != null) {
+            miningTask.cancel();
+            miningTask = null;
+        }
+
         miningTask = Bukkit.getScheduler().runTaskTimer(ZAdditions.getInstance(), () -> {
-            if (!isActive || !isOwnerOnline()) {
+            if (!isActive || isPaused || !isOwnerOnline()) {
                 pause();
                 return;
             }
@@ -316,6 +339,10 @@ public class ChunkMiner {
                 updateHologram();
             }
         }, 0L, 1L);
+    }
+
+    public boolean isPaused() {
+        return isPaused;
     }
 
     private void findNextBlock() {
@@ -536,19 +563,6 @@ public class ChunkMiner {
                 entity.remove();
             }
         });
-    }
-
-    public void pause() {
-        if (miningTask != null) {
-            miningTask.cancel();
-            miningTask = null;
-        }
-    }
-
-    public void resume() {
-        if (isActive) {
-            startMining();
-        }
     }
 
     public Inventory getStoragePage(int page) {

@@ -36,8 +36,19 @@ public class ChunkMinerCommand implements CommandExecutor, TabCompleter {
                         sender.sendMessage("§cNo tienes permiso para pausar Chunk Miners.");
                         return true;
                     }
-                    minerManager.pauseAllMiners();
-                    Bukkit.broadcastMessage("§e¡Todos los Chunk Miners han sido pausados!");
+                    try {
+                        if (minerManager.getTotalMinersCount() == 0) {
+                            sender.sendMessage("§cNo hay Chunk Miners colocados para pausar.");
+                            return true;
+                        }
+
+                        minerManager.pauseAllMiners();
+                        Bukkit.broadcastMessage("§e¡Todos los Chunk Miners han sido pausados!");
+                        sender.sendMessage(String.format("§7Se han pausado §e%d §7Chunk Miners.",
+                                minerManager.getTotalMinersCount()));
+                    } catch (IllegalStateException e) {
+                        sender.sendMessage("§cLos Chunk Miners ya están pausados.");
+                    }
                     return true;
 
                 case "start":
@@ -45,10 +56,48 @@ public class ChunkMinerCommand implements CommandExecutor, TabCompleter {
                         sender.sendMessage("§cNo tienes permiso para iniciar Chunk Miners.");
                         return true;
                     }
-                    minerManager.resumeAllMiners();
-                    Bukkit.broadcastMessage("§a¡Todos los Chunk Miners han sido reactivados!");
+                    try {
+                        if (minerManager.getTotalMinersCount() == 0) {
+                            sender.sendMessage("§cNo hay Chunk Miners colocados para iniciar.");
+                            return true;
+                        }
+
+                        minerManager.resumeAllMiners();
+                        Bukkit.broadcastMessage("§a¡Todos los Chunk Miners han sido reactivados!");
+
+                        // Mostrar cuántos miners se activaron (solo contará los que tienen dueños online)
+                        int activeMiners = minerManager.getActiveMinersCount();
+                        sender.sendMessage(String.format("§7Se han activado §e%d§7/§e%d §7Chunk Miners. " +
+                                        (activeMiners < minerManager.getTotalMinersCount() ?
+                                                "§8(Algunos dueños están offline)" : ""),
+                                activeMiners, minerManager.getTotalMinersCount()));
+                    } catch (IllegalStateException e) {
+                        sender.sendMessage("§cLos Chunk Miners ya están activos.");
+                    }
                     return true;
 
+                case "status":
+                    if (!sender.hasPermission("zadditions.chunkminer.manage")) {
+                        sender.sendMessage("§cNo tienes permiso para ver el estado de los Chunk Miners.");
+                        return true;
+                    }
+
+                    int total = minerManager.getTotalMinersCount();
+                    if (total == 0) {
+                        sender.sendMessage("§7No hay Chunk Miners colocados.");
+                        return true;
+                    }
+
+                    int active = minerManager.getActiveMinersCount();
+                    sender.sendMessage(new String[]{
+                            "§7Estado de los Chunk Miners:",
+                            String.format("§7• Total: §e%d", total),
+                            String.format("§7• Activos: §a%d", active),
+                            String.format("§7• Pausados: §c%d", total - active),
+                            String.format("§7• Estado global: %s",
+                                    minerManager.isGloballyPaused() ? "§cPausado" : "§aActivo")
+                    });
+                    return true;
                 case "give":
                     if (!sender.hasPermission("zadditions.chunkminer.give.others")) {
                         sender.sendMessage("§cNo tienes permiso para dar Chunk Miners a otros jugadores.");
@@ -134,6 +183,7 @@ public class ChunkMinerCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("zadditions.chunkminer.manage")) {
                 completions.add("pause");
                 completions.add("start");
+                completions.add("status");
             }
             if (sender.hasPermission("zadditions.chunkminer.give.others")) {
                 completions.add("give");

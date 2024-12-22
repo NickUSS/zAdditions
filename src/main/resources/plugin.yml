@@ -11,6 +11,7 @@ commands:
       §e/chunkminer give <jugador> [cantidad] §7- Dar Chunk Miners a otro jugador
       §e/chunkminer pause §7- Pausar todos los Chunk Miners
       §e/chunkminer start §7- Reactivar todos los Chunk Miners
+      §e/chunkminer status §7- Ver estado de los Chunk Miners
       §e/chunkminer reset §7- Resetear todos los Chunk Miners (solo consola)
 permissions:
   zadditions.chunkminer.give:
