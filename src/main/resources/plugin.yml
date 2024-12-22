@@ -1,22 +1,30 @@
-name: zAdditions
-version: '1.0'
+name: ZAdditions
+version: 1.0
 main: me.nicolas.zAdditions.ZAdditions
-api-version: '1.21'
-authors: [ Emojiado ]
+api-version: 1.19
+author: Emojiado
 commands:
-  trade:
-    description: Sistema de intercambio seguro entre jugadores
-    usage: /<command> <jugador>
   chunkminer:
-    description: Obtiene un Chunk Miner
-    usage: /<command>
+    description: Sistema de Chunk Miner
+    usage: |
+      §e/chunkminer [cantidad] §7- Obtener Chunk Miners
+      §e/chunkminer give <jugador> [cantidad] §7- Dar Chunk Miners a otro jugador
+      §e/chunkminer pause §7- Pausar todos los Chunk Miners
+      §e/chunkminer start §7- Reactivar todos los Chunk Miners
+      §e/chunkminer reset §7- Resetear todos los Chunk Miners (solo consola)
 permissions:
   zadditions.chunkminer.give:
     description: Permite obtener Chunk Miners
     default: op
+  zadditions.chunkminer.give.others:
+    description: Permite dar Chunk Miners a otros jugadores
+    default: op
+  zadditions.chunkminer.manage:
+    description: Permite pausar y reactivar Chunk Miners
+    default: op
   zadditions.chunkminer.place:
     description: Permite colocar Chunk Miners
-    default: op
+    default: true
   zadditions.chunkminer.admin:
-    description: Permite a los administradores gestionar cualquier Chunk Miner
+    description: Permite administrar Chunk Miners de otros jugadores
     default: op

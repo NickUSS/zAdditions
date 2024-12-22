@@ -19,7 +19,7 @@ public class ChunkMinerItem {
             "§e► Click derecho para ver el inventario",
             "§e► Rompe el beacon para recuperarlo",
             "",
-            "§8• §7Velocidad: §e1 bloque/3s",
+            "§8• §7Velocidad: §e1 bloque/1s",
             "§8• §7Radio: §eChunk completo",
             "",
             "§c⚠ Solo funciona si el dueño está online",

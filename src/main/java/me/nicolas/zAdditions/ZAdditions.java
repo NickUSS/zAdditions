@@ -22,19 +22,20 @@ public class ZAdditions extends JavaPlugin {
         saveDefaultConfig();
 
         // Inicializar el manager
-        chunkMinerManager = new ChunkMinerManager(this);
+        this.chunkMinerManager = new ChunkMinerManager(this);
 
-        // Registrar comandos
-        getCommand("chunkminer").setExecutor(new ChunkMinerCommand());
+        // Registrar comando y listener
+        ChunkMinerCommand command = new ChunkMinerCommand(chunkMinerManager);
+        ChunkMinerListener listener = new ChunkMinerListener(chunkMinerManager);
 
-        // Registrar eventos
-        getServer().getPluginManager().registerEvents(new ChunkMinerListener(chunkMinerManager), this);
+        getCommand("chunkminer").setExecutor(command);
+        getServer().getPluginManager().registerEvents(listener, this);
 
         // Programar guardado automático
         getServer().getScheduler().runTaskTimer(this,
-                () -> chunkMinerManager.saveAllData(),
-                6000L, // 5 minutos
-                6000L  // 5 minutos
+                () -> chunkMinerManager.saveData(),
+                6000L,
+                6000L
         );
 
         getLogger().info("ZAdditions ha sido habilitado!");
@@ -43,7 +44,8 @@ public class ZAdditions extends JavaPlugin {
     @Override
     public void onDisable() {
         if (chunkMinerManager != null) {
-            chunkMinerManager.cleanup();
+            chunkMinerManager.saveData();
+            chunkMinerManager.cleanupAllHolograms();
         }
         getLogger().info("ZAdditions ha sido deshabilitado!");
     }
