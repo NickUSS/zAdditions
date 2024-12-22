@@ -167,13 +167,19 @@ public class ChunkMinerListener implements Listener {
             return;
         }
 
-        if (!minerManager.canPlaceMiner(event.getBlock().getWorld())) {
+        if (!minerManager.canPlaceMiner(event.getBlock().getWorld(), player.getUniqueId())) {
             event.setCancelled(true);
-            player.sendMessage("§cHas alcanzado el límite de Chunk Miners en este mundo (10).");
+            int currentMiners = minerManager.getPlayerMinersCount(player.getUniqueId());
+            if (currentMiners >= 3) {
+                player.sendMessage("§cHas alcanzado el límite máximo de Chunk Miners (3).");
+            } else {
+                player.sendMessage("§cHas alcanzado el límite de Chunk Miners en este mundo (10).");
+            }
             return;
         }
 
         minerManager.addMiner(event.getBlock().getLocation(), player.getUniqueId());
-        player.sendMessage("§aChunk Miner colocado correctamente.");
+        player.sendMessage("§aChunk Miner colocado correctamente. §7(§e" +
+                minerManager.getPlayerMinersCount(player.getUniqueId()) + "§7/§e3§7)");
     }
 }
