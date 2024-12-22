@@ -487,84 +487,76 @@ public class ChunkMiner {
         // Limpiar agua alrededor antes de minar
         clearWaterAround(currentBlock.getLocation());
 
-        // Esperar un tick para asegurar que el agua se limpió completamente
-        Bukkit.getScheduler().runTaskLater(ZAdditions.getInstance(), () -> {
-            // Verificar si hay más agua después de la primera limpieza
-            clearWaterAround(currentBlock.getLocation());
-
-            // Continuar con el proceso normal de minado
-            if (!currentBlock.isLiquid()) {
-                Collection<ItemStack> drops = currentBlock.getDrops();
-                for (ItemStack drop : drops) {
-                    if (hasSpaceInStorage(drop)) {
-                        addItemToStorage(drop);
-                    } else {
-                        currentBlock.getWorld().dropItemNaturally(currentBlock.getLocation(), drop);
-                    }
+        // Recolectar drops (solo si no es agua)
+        if (!currentBlock.isLiquid()) {
+            Collection<ItemStack> drops = currentBlock.getDrops();
+            for (ItemStack drop : drops) {
+                if (hasSpaceInStorage(drop)) {
+                    addItemToStorage(drop);
+                } else {
+                    currentBlock.getWorld().dropItemNaturally(currentBlock.getLocation(), drop);
                 }
             }
+        }
 
-            Location blockLoc = currentBlock.getLocation().add(0.5, 0.5, 0.5);
+        Location blockLoc = currentBlock.getLocation().add(0.5, 0.5, 0.5);
 
-            // Efectos de ruptura
-            currentBlock.getWorld().playSound(
+        // Efectos de ruptura
+        currentBlock.getWorld().playSound(
+                blockLoc,
+                Sound.BLOCK_STONE_BREAK,
+                0.5f,
+                1.0f
+        );
+
+        // Efectos de partículas solo si no es agua
+        if (!currentBlock.isLiquid()) {
+            currentBlock.getWorld().spawnParticle(
+                    Particle.LAVA,
                     blockLoc,
-                    Sound.BLOCK_STONE_BREAK,
-                    0.5f,
-                    1.0f
+                    8,
+                    0.2, 0.2, 0.2,
+                    0
             );
 
-            if (!currentBlock.isLiquid()) {
-                currentBlock.getWorld().spawnParticle(
-                        Particle.LAVA,
-                        blockLoc,
-                        8,
-                        0.2, 0.2, 0.2,
-                        0
-                );
+            currentBlock.getWorld().spawnParticle(
+                    Particle.SMOKE,
+                    blockLoc,
+                    12,
+                    0.2, 0.2, 0.2,
+                    0
+            );
+        }
 
-                currentBlock.getWorld().spawnParticle(
-                        Particle.SMOKE,
-                        blockLoc,
-                        12,
-                        0.2, 0.2, 0.2,
-                        0
-                );
-            }
-
-            currentBlock.setType(Material.AIR);
-            blocksMinedCount++;
-            currentBlock = null;
-            miningProgress = 0;
-            moveToNextPosition();
-        }, 1L);
+        currentBlock.setType(Material.AIR);
+        blocksMinedCount++;
+        currentBlock = null;
+        miningProgress = 0;
+        moveToNextPosition();
     }
 
     private void clearWaterAround(Location center) {
-        int radius = 10; // Radio aumentado a 10 bloques
-        int verticalRadius = 5; // Radio vertical aumentado a 5 para mejor cobertura
+        int radius = 5; // Radio aumentado a 5 bloques
+        int verticalRadius = 3; // Radio vertical para cubrir más altura
         World world = center.getWorld();
         int centerX = center.getBlockX();
         int centerY = center.getBlockY();
         int centerZ = center.getBlockZ();
 
         // Primera pasada: Limpiar fuentes de agua
-        for (int y = verticalRadius; y >= -verticalRadius; y--) { // De arriba hacia abajo
-            for (int x = -radius; x <= radius; x++) {
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -verticalRadius; y <= verticalRadius; y++) {
                 for (int z = -radius; z <= radius; z++) {
-                    // Verificar si el bloque está dentro del radio circular para un efecto más natural
-                    if (x*x + z*z <= radius*radius) {
-                        Location loc = new Location(world, centerX + x, centerY + y, centerZ + z);
-                        Block block = loc.getBlock();
+                    Location loc = new Location(world, centerX + x, centerY + y, centerZ + z);
+                    Block block = loc.getBlock();
 
-                        if (block.isLiquid()) {
-                            // Si es una fuente de agua o está en el chunk
-                            if (block.getChunk().equals(chunk) ||
-                                    isWaterSource(block) ||
-                                    block.getType() == Material.LAVA) {
+                    if (block.isLiquid()) {
+                        // Si es una fuente de agua o está en el chunk
+                        if (block.getChunk().equals(chunk) ||
+                                isWaterSource(block) ||
+                                block.getType() == Material.LAVA) {
 
-                                clearLiquidBlock(block);
-                            }
+                            clearLiquidBlock(block);
                         }
                     }
                 }
@@ -572,49 +564,18 @@ public class ChunkMiner {
         }
 
         // Segunda pasada: Limpiar agua fluyendo
-        for (int pass = 0; pass < 3; pass++) { // Tres pasadas para mejor limpieza
-            for (int y = verticalRadius; y >= -verticalRadius; y--) {
-                for (int x = -radius; x <= radius; x++) {
+        for (int pass = 0; pass < 2; pass++) { // Hacer dos pasadas para asegurar
+            for (int x = -radius; x <= radius; x++) {
+                for (int y = -verticalRadius; y <= verticalRadius; y++) {
                     for (int z = -radius; z <= radius; z++) {
-                        if (x*x + z*z <= radius*radius) {
-                            Location loc = new Location(world, centerX + x, centerY + y, centerZ + z);
-                            Block block = loc.getBlock();
+                        Location loc = new Location(world, centerX + x, centerY + y, centerZ + z);
+                        Block block = loc.getBlock();
 
-                            if (block.isLiquid()) {
-                                clearLiquidBlock(block);
-
-                                // Verificar bloques adyacentes para mejor limpieza
-                                checkAdjacentBlocks(block);
-                            }
+                        if (block.isLiquid()) {
+                            clearLiquidBlock(block);
                         }
                     }
                 }
-            }
-
-            // Pequeña pausa entre pasadas para mejor efecto visual
-            if (pass < 2) {
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void checkAdjacentBlocks(Block center) {
-        Block[] adjacentBlocks = {
-                center.getRelative(1, 0, 0),
-                center.getRelative(-1, 0, 0),
-                center.getRelative(0, 0, 1),
-                center.getRelative(0, 0, -1),
-                center.getRelative(0, 1, 0),
-                center.getRelative(0, -1, 0)
-        };
-
-        for (Block adjacent : adjacentBlocks) {
-            if (adjacent.isLiquid()) {
-                clearLiquidBlock(adjacent);
             }
         }
     }
@@ -625,64 +586,53 @@ public class ChunkMiner {
 
         // Diferentes efectos según el tipo de líquido
         if (block.getType() == Material.WATER) {
-            // Reducir la cantidad de partículas para evitar sobrecarga
-            if (Math.random() < 0.3) { // Solo 30% de probabilidad de mostrar efectos
-                world.spawnParticle(
-                        Particle.SPLASH,
-                        loc,
-                        8,
-                        0.3, 0.3, 0.3,
-                        0
-                );
+            // Efecto de drenado de agua
+            world.spawnParticle(
+                    Particle.SPLASH,
+                    loc,
+                    15, // Más partículas
+                    0.3, 0.3, 0.3,
+                    0
+            );
+            world.spawnParticle(
+                    Particle.BUBBLE,
+                    loc,
+                    10,
+                    0.2, 0, 0.2,
+                    0
+            );
 
-                if (Math.random() < 0.5) { // 50% de probabilidad para burbujas
-                    world.spawnParticle(
-                            Particle.BUBBLE,
-                            loc,
-                            5,
-                            0.2, 0, 0.2,
-                            0
-                    );
-                }
-
-                // Sonido ocasional para no saturar
-                if (Math.random() < 0.2) {
-                    world.playSound(
-                            loc,
-                            Sound.ITEM_BUCKET_EMPTY,
-                            0.1f,
-                            1.0f
-                    );
-                }
-            }
+            // Sonido de drenado de agua
+            world.playSound(
+                    loc,
+                    Sound.ITEM_BUCKET_EMPTY,
+                    0.2f,
+                    1.0f
+            );
         } else if (block.getType() == Material.LAVA) {
-            // Efectos de lava más notorios pero también optimizados
-            if (Math.random() < 0.4) {
-                world.spawnParticle(
-                        Particle.SMOKE,
-                        loc,
-                        5,
-                        0.2, 0.2, 0.2,
-                        0
-                );
+            // Efecto de enfriamiento de lava
+            world.spawnParticle(
+                    Particle.SMOKE,
+                    loc,
+                    10,
+                    0.2, 0.2, 0.2,
+                    0
+            );
+            world.spawnParticle(
+                    Particle.LAVA,
+                    loc,
+                    5,
+                    0.2, 0.2, 0.2,
+                    0
+            );
 
-                if (Math.random() < 0.3) {
-                    world.spawnParticle(
-                            Particle.LAVA,
-                            loc,
-                            2,
-                            0.2, 0.2, 0.2,
-                            0
-                    );
-
-                    world.playSound(
-                            loc,
-                            Sound.BLOCK_LAVA_EXTINGUISH,
-                            0.2f,
-                            1.0f
-                    );
-                }
-            }
+            // Sonido de lava enfriándose
+            world.playSound(
+                    loc,
+                    Sound.BLOCK_LAVA_EXTINGUISH,
+                    0.2f,
+                    1.0f
+            );
         }
 
         // Remover el líquido
