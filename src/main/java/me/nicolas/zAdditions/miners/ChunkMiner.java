@@ -4,6 +4,7 @@ import me.nicolas.zAdditions.ZAdditions;
 import me.nicolas.zAdditions.items.ChunkMinerItem;
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.Levelled;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
@@ -424,22 +425,35 @@ public class ChunkMiner {
         Location blockLoc = currentBlock.getLocation().add(0.5, 0.5, 0.5);
         Location beaconLoc = location.clone().add(0.5, 0.5, 0.5);
 
+        // Dibujar láser
         drawLaser(beaconLoc, blockLoc);
 
+        // Partículas de minado (diferentes para agua)
         if (miningProgress % 2 == 0) {
-            currentBlock.getWorld().spawnParticle(
-                    Particle.SMOKE,
-                    blockLoc,
-                    3,
-                    0.2, 0.2, 0.2,
-                    0
-            );
+            if (currentBlock.isLiquid()) {
+                currentBlock.getWorld().spawnParticle(
+                        Particle.SPLASH,
+                        blockLoc,
+                        5,
+                        0.2, 0.2, 0.2,
+                        0
+                );
+            } else {
+                currentBlock.getWorld().spawnParticle(
+                        Particle.SMOKE,
+                        blockLoc,
+                        3,
+                        0.2, 0.2, 0.2,
+                        0
+                );
+            }
         }
 
+        // Sonido de minado
         if (miningProgress % 5 == 0) {
             currentBlock.getWorld().playSound(
                     blockLoc,
-                    Sound.BLOCK_STONE_HIT,
+                    currentBlock.isLiquid() ? Sound.ITEM_BUCKET_EMPTY : Sound.BLOCK_STONE_HIT,
                     0.2f,
                     1.0f
             );
@@ -470,52 +484,225 @@ public class ChunkMiner {
     private void mineCurrentBlock() {
         if (currentBlock == null) return;
 
-        Collection<ItemStack> drops = currentBlock.getDrops();
-        for (ItemStack drop : drops) {
-            if (hasSpaceInStorage(drop)) {
-                addItemToStorage(drop);
-            } else {
-                currentBlock.getWorld().dropItemNaturally(currentBlock.getLocation(), drop);
+        // Limpiar agua alrededor antes de minar
+        clearWaterAround(currentBlock.getLocation());
+
+        // Esperar un tick para asegurar que el agua se limpió completamente
+        Bukkit.getScheduler().runTaskLater(ZAdditions.getInstance(), () -> {
+            // Verificar si hay más agua después de la primera limpieza
+            clearWaterAround(currentBlock.getLocation());
+
+            // Continuar con el proceso normal de minado
+            if (!currentBlock.isLiquid()) {
+                Collection<ItemStack> drops = currentBlock.getDrops();
+                for (ItemStack drop : drops) {
+                    if (hasSpaceInStorage(drop)) {
+                        addItemToStorage(drop);
+                    } else {
+                        currentBlock.getWorld().dropItemNaturally(currentBlock.getLocation(), drop);
+                    }
+                }
+            }
+
+            Location blockLoc = currentBlock.getLocation().add(0.5, 0.5, 0.5);
+
+            // Efectos de ruptura
+            currentBlock.getWorld().playSound(
+                    blockLoc,
+                    Sound.BLOCK_STONE_BREAK,
+                    0.5f,
+                    1.0f
+            );
+
+            if (!currentBlock.isLiquid()) {
+                currentBlock.getWorld().spawnParticle(
+                        Particle.LAVA,
+                        blockLoc,
+                        8,
+                        0.2, 0.2, 0.2,
+                        0
+                );
+
+                currentBlock.getWorld().spawnParticle(
+                        Particle.SMOKE,
+                        blockLoc,
+                        12,
+                        0.2, 0.2, 0.2,
+                        0
+                );
+            }
+
+            currentBlock.setType(Material.AIR);
+            blocksMinedCount++;
+            currentBlock = null;
+            miningProgress = 0;
+            moveToNextPosition();
+        }, 1L);
+    }
+
+    private void clearWaterAround(Location center) {
+        int radius = 10; // Radio aumentado a 10 bloques
+        int verticalRadius = 5; // Radio vertical aumentado a 5 para mejor cobertura
+        World world = center.getWorld();
+        int centerX = center.getBlockX();
+        int centerY = center.getBlockY();
+        int centerZ = center.getBlockZ();
+
+        // Primera pasada: Limpiar fuentes de agua
+        for (int y = verticalRadius; y >= -verticalRadius; y--) { // De arriba hacia abajo
+            for (int x = -radius; x <= radius; x++) {
+                for (int z = -radius; z <= radius; z++) {
+                    // Verificar si el bloque está dentro del radio circular para un efecto más natural
+                    if (x*x + z*z <= radius*radius) {
+                        Location loc = new Location(world, centerX + x, centerY + y, centerZ + z);
+                        Block block = loc.getBlock();
+
+                        if (block.isLiquid()) {
+                            // Si es una fuente de agua o está en el chunk
+                            if (block.getChunk().equals(chunk) ||
+                                    isWaterSource(block) ||
+                                    block.getType() == Material.LAVA) {
+
+                                clearLiquidBlock(block);
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        Location blockLoc = currentBlock.getLocation().add(0.5, 0.5, 0.5);
+        // Segunda pasada: Limpiar agua fluyendo
+        for (int pass = 0; pass < 3; pass++) { // Tres pasadas para mejor limpieza
+            for (int y = verticalRadius; y >= -verticalRadius; y--) {
+                for (int x = -radius; x <= radius; x++) {
+                    for (int z = -radius; z <= radius; z++) {
+                        if (x*x + z*z <= radius*radius) {
+                            Location loc = new Location(world, centerX + x, centerY + y, centerZ + z);
+                            Block block = loc.getBlock();
 
-        currentBlock.getWorld().playSound(
-                blockLoc,
-                Sound.BLOCK_STONE_BREAK,
-                0.5f,
-                1.0f
-        );
+                            if (block.isLiquid()) {
+                                clearLiquidBlock(block);
 
-        currentBlock.getWorld().spawnParticle(
-                Particle.LAVA,
-                blockLoc,
-                8,
-                0.2, 0.2, 0.2,
-                0
-        );
+                                // Verificar bloques adyacentes para mejor limpieza
+                                checkAdjacentBlocks(block);
+                            }
+                        }
+                    }
+                }
+            }
 
-        currentBlock.getWorld().spawnParticle(
-                Particle.SMOKE,
-                blockLoc,
-                12,
-                0.2, 0.2, 0.2,
-                0
-        );
+            // Pequeña pausa entre pasadas para mejor efecto visual
+            if (pass < 2) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
 
-        currentBlock.setType(Material.AIR);
-        blocksMinedCount++;
-        currentBlock = null;
-        miningProgress = 0;
-        moveToNextPosition();
+    private void checkAdjacentBlocks(Block center) {
+        Block[] adjacentBlocks = {
+                center.getRelative(1, 0, 0),
+                center.getRelative(-1, 0, 0),
+                center.getRelative(0, 0, 1),
+                center.getRelative(0, 0, -1),
+                center.getRelative(0, 1, 0),
+                center.getRelative(0, -1, 0)
+        };
+
+        for (Block adjacent : adjacentBlocks) {
+            if (adjacent.isLiquid()) {
+                clearLiquidBlock(adjacent);
+            }
+        }
+    }
+
+    private void clearLiquidBlock(Block block) {
+        Location loc = block.getLocation().add(0.5, 0.5, 0.5);
+        World world = block.getWorld();
+
+        // Diferentes efectos según el tipo de líquido
+        if (block.getType() == Material.WATER) {
+            // Reducir la cantidad de partículas para evitar sobrecarga
+            if (Math.random() < 0.3) { // Solo 30% de probabilidad de mostrar efectos
+                world.spawnParticle(
+                        Particle.SPLASH,
+                        loc,
+                        8,
+                        0.3, 0.3, 0.3,
+                        0
+                );
+
+                if (Math.random() < 0.5) { // 50% de probabilidad para burbujas
+                    world.spawnParticle(
+                            Particle.BUBBLE,
+                            loc,
+                            5,
+                            0.2, 0, 0.2,
+                            0
+                    );
+                }
+
+                // Sonido ocasional para no saturar
+                if (Math.random() < 0.2) {
+                    world.playSound(
+                            loc,
+                            Sound.ITEM_BUCKET_EMPTY,
+                            0.1f,
+                            1.0f
+                    );
+                }
+            }
+        } else if (block.getType() == Material.LAVA) {
+            // Efectos de lava más notorios pero también optimizados
+            if (Math.random() < 0.4) {
+                world.spawnParticle(
+                        Particle.SMOKE,
+                        loc,
+                        5,
+                        0.2, 0.2, 0.2,
+                        0
+                );
+
+                if (Math.random() < 0.3) {
+                    world.spawnParticle(
+                            Particle.LAVA,
+                            loc,
+                            2,
+                            0.2, 0.2, 0.2,
+                            0
+                    );
+
+                    world.playSound(
+                            loc,
+                            Sound.BLOCK_LAVA_EXTINGUISH,
+                            0.2f,
+                            1.0f
+                    );
+                }
+            }
+        }
+
+        // Remover el líquido
+        block.setType(Material.AIR);
+    }
+
+    private boolean isWaterSource(Block block) {
+        if (block.getType() != Material.WATER) return false;
+
+        if (block.getBlockData() instanceof Levelled) {
+            Levelled levelledBlock = (Levelled) block.getBlockData();
+            return levelledBlock.getLevel() == 0; // Nivel 0 indica fuente de agua
+        }
+        return false;
     }
 
     private boolean shouldMineBlock(Block block) {
         return !block.getType().isAir() &&
                 !block.getType().equals(Material.BEDROCK) &&
                 !block.getType().equals(Material.BEACON) &&
-                !block.isLiquid() &&
                 !block.getType().name().contains("SPAWNER");
     }
 
