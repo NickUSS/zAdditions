@@ -24,6 +24,8 @@ public class ChunkMinerManager implements Listener {
     private final File dataFile;
     private FileConfiguration dataConfig;
     private boolean isGloballyPaused = false;
+    private final Map<UUID, Integer> minersPerPlayer = new HashMap<>();
+    private static final int MAX_MINERS_PER_PLAYER = 3;
 
     public ChunkMinerManager(Plugin plugin) {
         this.plugin = plugin;
@@ -41,6 +43,11 @@ public class ChunkMinerManager implements Listener {
             plugin.saveResource("miners.yml", false);
         }
         dataConfig = YamlConfiguration.loadConfiguration(dataFile);
+
+        // Limpiar contadores existentes
+        minersPerPlayer.clear();
+        minersPerWorld.clear();
+        miners.clear();
 
         isGloballyPaused = dataConfig.getBoolean("globally-paused", false);
 
@@ -61,16 +68,11 @@ public class ChunkMinerManager implements Listener {
                             ChunkMiner miner = new ChunkMiner(location, ownerUUID);
                             miners.put(location, miner);
                             minersPerWorld.merge(world, 1, Integer::sum);
-
-                            // Si está pausado globalmente, pausar el miner
-                            if (isGloballyPaused) {
-                                miner.pause();
-                            }
+                            minersPerPlayer.merge(ownerUUID, 1, Integer::sum);
                         }
                     }
                 } catch (Exception e) {
                     plugin.getLogger().warning("Error al cargar Chunk Miner: " + key);
-                    e.printStackTrace();
                 }
             }
         }
@@ -85,6 +87,16 @@ public class ChunkMinerManager implements Listener {
             throw new IllegalStateException("ChunkMinerManager no está inicializado correctamente");
         }
     }
+
+    public boolean canPlaceMiner(World world, UUID playerUUID) {
+        // Verificar límite por jugador
+        if (minersPerPlayer.getOrDefault(playerUUID, 0) >= MAX_MINERS_PER_PLAYER) {
+            return false;
+        }
+        // Verificar límite por mundo
+        return minersPerWorld.getOrDefault(world, 0) < 10;
+    }
+
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -174,10 +186,10 @@ public class ChunkMinerManager implements Listener {
     }
 
     public void addMiner(Location location, UUID ownerUUID) {
-        validateState();
         ChunkMiner miner = new ChunkMiner(location, ownerUUID);
         miners.put(location, miner);
         minersPerWorld.merge(location.getWorld(), 1, Integer::sum);
+        minersPerPlayer.merge(ownerUUID, 1, Integer::sum); // Incrementar contador del jugador
         saveData();
     }
 
@@ -212,8 +224,17 @@ public class ChunkMinerManager implements Listener {
         if (miner != null) {
             miner.remove(true);
             minersPerWorld.merge(location.getWorld(), -1, Integer::sum);
-            saveData();
+            // Decrementar contador del jugador
+            UUID ownerUUID = miner.getOwnerUUID();
+            minersPerPlayer.merge(ownerUUID, -1, Integer::sum);
+            if (minersPerPlayer.get(ownerUUID) <= 0) {
+                minersPerPlayer.remove(ownerUUID);
+            }
         }
+    }
+
+    public int getPlayerMinersCount(UUID playerUUID) {
+        return minersPerPlayer.getOrDefault(playerUUID, 0);
     }
 
     public ChunkMiner getMiner(Location location) {
