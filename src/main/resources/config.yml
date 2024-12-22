@@ -1,0 +1,20 @@
+# Configuración general
+global-miner-limit: 50
+save-interval: 300
+
+# Configuración de minado
+mining:
+  speed: 3 # segundos entre cada bloque
+  particle-density: 10
+  sound-volume: 0.5
+  laser-segments: 20
+
+# Mensajes personalizables
+messages:
+  prefix: "&6[ChunkMiner] "
+  placed: "&aChunk Miner colocado correctamente."
+  removed: "&aChunk Miner removido y devuelto a tu inventario."
+  no-permission: "&cNo tienes permiso para hacer esto."
+  world-limit: "&cHas alcanzado el límite de Chunk Miners en este mundo."
+  chunk-occupied: "&cYa hay un Chunk Miner en este chunk."
+  global-limit: "&cSe ha alcanzado el límite global de Chunk Miners."

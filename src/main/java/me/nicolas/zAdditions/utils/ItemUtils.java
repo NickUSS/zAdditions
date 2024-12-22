@@ -1,30 +1,24 @@
 package me.nicolas.zAdditions.utils;
 
+import me.nicolas.zAdditions.ZAdditions;
 import org.bukkit.NamespacedKey;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-import java.util.List;
-
 public class ItemUtils {
-    public static ItemStack createCustomItem(ItemStack item, String displayName, List<String> lore, String tag) {
-        ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(displayName);
-        meta.setLore(lore);
 
-        NamespacedKey key = new NamespacedKey("zadditions", tag);
+    public static void setCustomTag(ItemMeta meta, String tag) {
+        NamespacedKey key = new NamespacedKey(ZAdditions.getInstance(), tag);
         meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, tag);
-
-        item.setItemMeta(meta);
-        return item;
     }
 
-    public static boolean hasCustomTag(ItemStack item, String tag) {
-        if (item == null || !item.hasItemMeta()) return false;
+    public static boolean hasCustomTag(ItemMeta meta, String tag) {
+        NamespacedKey key = new NamespacedKey(ZAdditions.getInstance(), tag);
+        return meta.getPersistentDataContainer().has(key, PersistentDataType.STRING);
+    }
 
-        NamespacedKey key = new NamespacedKey("zadditions", tag);
-        return item.getItemMeta().getPersistentDataContainer()
-                .has(key, PersistentDataType.STRING);
+    public static String getCustomTag(ItemMeta meta, String tag) {
+        NamespacedKey key = new NamespacedKey(ZAdditions.getInstance(), tag);
+        return meta.getPersistentDataContainer().get(key, PersistentDataType.STRING);
     }
 }

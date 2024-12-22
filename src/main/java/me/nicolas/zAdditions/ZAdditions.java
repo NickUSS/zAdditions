@@ -1,42 +1,40 @@
 package me.nicolas.zAdditions;
 
 import me.nicolas.zAdditions.commands.ChunkMinerCommand;
-import me.nicolas.zAdditions.commands.TradeCommand;
 import me.nicolas.zAdditions.listeners.ChunkMinerListener;
-import me.nicolas.zAdditions.listeners.TradeListener;
 import me.nicolas.zAdditions.managers.ChunkMinerManager;
-import me.nicolas.zAdditions.managers.TradeManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class ZAdditions extends JavaPlugin {
-
     private static ZAdditions instance;
-    private TradeManager tradeManager;
     private ChunkMinerManager chunkMinerManager;
-
 
     @Override
     public void onEnable() {
         instance = this;
 
-        // Inicializar el manager
-        tradeManager = new TradeManager(this);
-        chunkMinerManager = new ChunkMinerManager();
+        // Crear carpeta de configuración si no existe
+        if (!getDataFolder().exists()) {
+            getDataFolder().mkdirs();
+        }
 
-        // Registrar comando
-        getCommand("trade").setExecutor(new TradeCommand(tradeManager));
+        // Guardar configuración por defecto
+        saveDefaultConfig();
+
+        // Inicializar el manager
+        chunkMinerManager = new ChunkMinerManager(this);
+
+        // Registrar comandos
         getCommand("chunkminer").setExecutor(new ChunkMinerCommand());
 
+        // Registrar eventos
+        getServer().getPluginManager().registerEvents(new ChunkMinerListener(chunkMinerManager), this);
 
-        // Registrar listener
-        getServer().getPluginManager().registerEvents(
-                new TradeListener(tradeManager),
-                this
-        );
-
-        getServer().getPluginManager().registerEvents(
-                new ChunkMinerListener(chunkMinerManager),
-                this
+        // Programar guardado automático
+        getServer().getScheduler().runTaskTimer(this,
+                () -> chunkMinerManager.saveAllData(),
+                6000L, // 5 minutos
+                6000L  // 5 minutos
         );
 
         getLogger().info("ZAdditions ha sido habilitado!");
@@ -44,18 +42,17 @@ public class ZAdditions extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (tradeManager != null) {
-            tradeManager.cancelAllTrades();
-        }
-
         if (chunkMinerManager != null) {
-            chunkMinerManager.removeAllMiners();
+            chunkMinerManager.cleanup();
         }
-
         getLogger().info("ZAdditions ha sido deshabilitado!");
     }
 
     public static ZAdditions getInstance() {
         return instance;
+    }
+
+    public ChunkMinerManager getChunkMinerManager() {
+        return chunkMinerManager;
     }
 }

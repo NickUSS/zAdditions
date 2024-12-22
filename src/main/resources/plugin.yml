@@ -17,3 +17,6 @@ permissions:
   zadditions.chunkminer.place:
     description: Permite colocar Chunk Miners
     default: op
+  zadditions.chunkminer.admin:
+    description: Permite a los administradores gestionar cualquier Chunk Miner
+    default: op
