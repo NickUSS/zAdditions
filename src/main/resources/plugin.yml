@@ -3,6 +3,7 @@ version: 1.0
 main: me.nicolas.zAdditions.ZAdditions
 api-version: 1.19
 author: Emojiado
+softdepend: [WorldGuard, WorldEdit]
 commands:
   chunkminer:
     description: Sistema de Chunk Miner
@@ -28,4 +29,7 @@ permissions:
     default: true
   zadditions.chunkminer.admin:
     description: Permite administrar Chunk Miners de otros jugadores
+    default: op
+  zadditions.chunkminer.bypass.worldguard:
+    description: Permite ignorar las restricciones de WorldGuard
     default: op

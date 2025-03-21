@@ -9,6 +9,13 @@ mining:
   sound-volume: 0.5
   laser-segments: 20
 
+# Configuración de WorldGuard
+worldguard:
+  enabled: true
+  respect-regions: true # Si es false, ignorará la integración de WorldGuard aunque esté instalado
+  only-owner-can-mine: true # Solo el dueño de la región puede minar en ella
+  check-each-block: true # Verificar permisos para cada bloque minado (más seguro pero más carga)
+
 # Mensajes personalizables
 messages:
   prefix: "&6[ChunkMiner] "
@@ -18,3 +25,5 @@ messages:
   world-limit: "&cHas alcanzado el límite de Chunk Miners en este mundo."
   chunk-occupied: "&cYa hay un Chunk Miner en este chunk."
   global-limit: "&cSe ha alcanzado el límite global de Chunk Miners."
+  region-protected: "&cNo puedes colocar un Chunk Miner en una región protegida que no te pertenece."
+  region-chunk-conflict: "&cNo puedes colocar un Chunk Miner aquí porque hay regiones protegidas en este chunk."

@@ -2,6 +2,7 @@ package me.nicolas.zAdditions.miners;
 
 import me.nicolas.zAdditions.ZAdditions;
 import me.nicolas.zAdditions.items.ChunkMinerItem;
+import me.nicolas.zAdditions.utils.WorldGuardUtils;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Levelled;
@@ -650,10 +651,35 @@ public class ChunkMiner {
     }
 
     private boolean shouldMineBlock(Block block) {
-        return !block.getType().isAir() &&
-                !block.getType().equals(Material.BEDROCK) &&
-                !block.getType().equals(Material.BEACON) &&
-                !block.getType().name().contains("SPAWNER");
+        // Verificar restricciones básicas
+        if (block.getType().isAir() ||
+                block.getType().equals(Material.BEDROCK) ||
+                block.getType().equals(Material.BEACON) ||
+                block.getType().name().contains("SPAWNER")) {
+            return false;
+        }
+
+        // Verificar restricciones de WorldGuard si está habilitado
+        ZAdditions plugin = ZAdditions.getInstance();
+        if (plugin.isWorldGuardEnabled()) {
+            // Si está en región global (sin protección), permitir minar
+            if (WorldGuardUtils.isInGlobalRegion(block)) {
+                return true;
+            }
+
+            // Si está en una región protegida, solo permitir si el dueño es el mismo
+            Player owner = Bukkit.getPlayer(ownerUUID);
+            if (owner == null) {
+                // Si el dueño no está online, no minar en regiones protegidas
+                return false;
+            }
+
+            // Solo permitir minar si el dueño del miner es dueño de la región
+            return WorldGuardUtils.isOwner(owner, block.getLocation());
+        }
+
+        // Si WorldGuard no está habilitado, permitir minar cualquier bloque válido
+        return true;
     }
 
     private boolean isOwnerOnline() {

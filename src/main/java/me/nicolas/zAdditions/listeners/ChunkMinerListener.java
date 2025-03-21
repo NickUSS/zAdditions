@@ -1,8 +1,11 @@
 package me.nicolas.zAdditions.listeners;
 
+import me.nicolas.zAdditions.ZAdditions;
 import me.nicolas.zAdditions.items.ChunkMinerItem;
 import me.nicolas.zAdditions.managers.ChunkMinerManager;
 import me.nicolas.zAdditions.miners.ChunkMiner;
+import me.nicolas.zAdditions.utils.WorldGuardUtils;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -17,14 +20,18 @@ import org.bukkit.event.block.Action;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.HashMap;
+
 public class ChunkMinerListener implements Listener {
     private final ChunkMinerManager minerManager;
+    private final ZAdditions plugin;
 
     public ChunkMinerListener(ChunkMinerManager minerManager) {
         if (minerManager == null) {
             throw new IllegalArgumentException("ChunkMinerManager no puede ser null");
         }
         this.minerManager = minerManager;
+        this.plugin = ZAdditions.getInstance();
     }
 
     @EventHandler
@@ -101,6 +108,84 @@ public class ChunkMinerListener implements Listener {
         }
     }
 
+    @EventHandler
+    public void onBlockPlace(BlockPlaceEvent event) {
+        if (!ChunkMinerItem.isChunkMiner(event.getItemInHand())) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+
+        // Verificar permiso básico
+        if (!player.hasPermission("zadditions.chunkminer.place")) {
+            event.setCancelled(true);
+            player.sendMessage(plugin.getMessage("no-permission"));
+            return;
+        }
+
+        // Verificar si ya hay un miner en este chunk
+        if (minerManager.hasMinerInChunk(event.getBlock().getChunk())) {
+            event.setCancelled(true);
+            player.sendMessage(plugin.getMessage("chunk-occupied"));
+            return;
+        }
+
+        // Verificar límites de jugador y mundo
+        if (!minerManager.canPlaceMiner(event.getBlock().getWorld(), player.getUniqueId())) {
+            event.setCancelled(true);
+            int currentMiners = minerManager.getPlayerMinersCount(player.getUniqueId());
+            if (currentMiners >= 3) {
+                player.sendMessage("§cHas alcanzado el límite máximo de Chunk Miners (3).");
+            } else {
+                player.sendMessage(plugin.getMessage("world-limit"));
+            }
+            return;
+        }
+
+        // Verificar restricciones de WorldGuard (solo si está habilitado)
+        if (plugin.isWorldGuardEnabled()) {
+            // Verificar las 4 esquinas y centro del chunk
+            int chunkX = event.getBlock().getChunk().getX() * 16;
+            int chunkZ = event.getBlock().getChunk().getZ() * 16;
+            int y = event.getBlock().getWorld().getMaxHeight() / 2;
+
+            Location[] testPoints = {
+                    new Location(event.getBlock().getWorld(), chunkX, y, chunkZ),
+                    new Location(event.getBlock().getWorld(), chunkX + 15, y, chunkZ),
+                    new Location(event.getBlock().getWorld(), chunkX, y, chunkZ + 15),
+                    new Location(event.getBlock().getWorld(), chunkX + 15, y, chunkZ + 15),
+                    new Location(event.getBlock().getWorld(), chunkX + 8, y, chunkZ + 8)
+            };
+
+            boolean canPlaceInChunk = true;
+
+            for (Location point : testPoints) {
+                // Verificar si el punto está en una región protegida
+                if (WorldGuardUtils.isInGlobalRegion(point.getBlock())) {
+                    // Si está en región global (sin protección), permitir
+                    continue;
+                }
+
+                // Si está en una región protegida, verificar si el jugador es dueño
+                if (!WorldGuardUtils.isOwner(player, point)) {
+                    canPlaceInChunk = false;
+                    break;
+                }
+            }
+
+            if (!canPlaceInChunk) {
+                event.setCancelled(true);
+                player.sendMessage("§cNo puedes colocar un Chunk Miner aquí porque hay regiones protegidas en este chunk que no te pertenecen.");
+                return;
+            }
+        }
+
+        // Si todas las verificaciones pasan, añadir el miner
+        minerManager.addMiner(event.getBlock().getLocation(), player.getUniqueId());
+        player.sendMessage(plugin.getMessage("placed") + " §7(§e" +
+                minerManager.getPlayerMinersCount(player.getUniqueId()) + "§7/§e3§7)");
+    }
+
     @EventHandler(priority = EventPriority.HIGH)
     public void onBlockBreak(BlockBreakEvent event) {
         if (event.getBlock().getType() != Material.BEACON) return;
@@ -111,27 +196,51 @@ public class ChunkMinerListener implements Listener {
         event.setCancelled(true);
         Player player = event.getPlayer();
 
-        if (!player.getUniqueId().equals(miner.getOwnerUUID()) &&
-                !player.hasPermission("zadditions.chunkminer.admin")) {
+        // Verificar si es el dueño
+        boolean isOwner = player.getUniqueId().equals(miner.getOwnerUUID());
+
+        // Permitir que el dueño o un admin rompa el ChunkMiner
+        if (!isOwner && !player.hasPermission("zadditions.chunkminer.admin")) {
             player.sendMessage("§cSolo el dueño o un administrador puede romper este Chunk Miner.");
             return;
         }
 
-        if (!player.hasPermission("zadditions.chunkminer.place")) {
+        // Verificar permiso básico (esto es para los admins)
+        if (!isOwner && !player.hasPermission("zadditions.chunkminer.place")) {
             player.sendMessage("§cNo tienes permiso para usar Chunk Miners.");
             return;
         }
 
-        // Soltar el item al suelo
-        event.getBlock().getWorld().dropItemNaturally(
-                event.getBlock().getLocation().add(0.5, 0.5, 0.5),
-                ChunkMinerItem.create()
-        );
+        // Entregar el item directamente al inventario del jugador si es el dueño
+        if (isOwner) {
+            // Crear el item de ChunkMiner
+            ItemStack chunkMinerItem = ChunkMinerItem.create();
+
+            // Intentar añadir al inventario
+            HashMap<Integer, ItemStack> notAdded = player.getInventory().addItem(chunkMinerItem);
+
+            // Si no se pudo añadir al inventario (porque está lleno), soltarlo al suelo
+            if (!notAdded.isEmpty()) {
+                player.getWorld().dropItemNaturally(
+                        player.getLocation(),
+                        chunkMinerItem
+                );
+                player.sendMessage("§aTu inventario está lleno. El Chunk Miner ha sido soltado a tus pies.");
+            } else {
+                player.sendMessage("§aChunk Miner recuperado a tu inventario.");
+            }
+        } else {
+            // Si es un admin quien lo rompe, soltar el item al suelo como antes
+            event.getBlock().getWorld().dropItemNaturally(
+                    event.getBlock().getLocation().add(0.5, 0.5, 0.5),
+                    ChunkMinerItem.create()
+            );
+            player.sendMessage("§aChunk Miner removido y soltado al suelo.");
+        }
 
         // Remover el miner sin soltar item adicional
         miner.remove(false);
         minerManager.removeMiner(event.getBlock().getLocation());
-        player.sendMessage("§aChunk Miner removido.");
     }
 
     @EventHandler
@@ -145,41 +254,5 @@ public class ChunkMinerListener implements Listener {
                 }
             }
         }
-    }
-
-    @EventHandler
-    public void onBlockPlace(BlockPlaceEvent event) {
-        if (!ChunkMinerItem.isChunkMiner(event.getItemInHand())) {
-            return;
-        }
-
-        Player player = event.getPlayer();
-
-        if (!player.hasPermission("zadditions.chunkminer.place")) {
-            event.setCancelled(true);
-            player.sendMessage("§cNo tienes permiso para colocar Chunk Miners.");
-            return;
-        }
-
-        if (minerManager.hasMinerInChunk(event.getBlock().getChunk())) {
-            event.setCancelled(true);
-            player.sendMessage("§cYa hay un Chunk Miner en este chunk.");
-            return;
-        }
-
-        if (!minerManager.canPlaceMiner(event.getBlock().getWorld(), player.getUniqueId())) {
-            event.setCancelled(true);
-            int currentMiners = minerManager.getPlayerMinersCount(player.getUniqueId());
-            if (currentMiners >= 3) {
-                player.sendMessage("§cHas alcanzado el límite máximo de Chunk Miners (3).");
-            } else {
-                player.sendMessage("§cHas alcanzado el límite de Chunk Miners en este mundo (10).");
-            }
-            return;
-        }
-
-        minerManager.addMiner(event.getBlock().getLocation(), player.getUniqueId());
-        player.sendMessage("§aChunk Miner colocado correctamente. §7(§e" +
-                minerManager.getPlayerMinersCount(player.getUniqueId()) + "§7/§e3§7)");
     }
 }
