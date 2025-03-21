@@ -186,61 +186,64 @@ public class ChunkMinerListener implements Listener {
                 minerManager.getPlayerMinersCount(player.getUniqueId()) + "§7/§e3§7)");
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGHEST) // Usar HIGHEST para estar seguro
     public void onBlockBreak(BlockBreakEvent event) {
+        // Verificar si el bloque es un beacon
         if (event.getBlock().getType() != Material.BEACON) return;
 
+        // Verificar si es un ChunkMiner
         ChunkMiner miner = minerManager.getMiner(event.getBlock().getLocation());
         if (miner == null) return;
 
+        // Cancelar el evento
         event.setCancelled(true);
-        Player player = event.getPlayer();
 
-        // Verificar si es el dueño
+        Player player = event.getPlayer();
         boolean isOwner = player.getUniqueId().equals(miner.getOwnerUUID());
 
-        // Permitir que el dueño o un admin rompa el ChunkMiner
+        // Verificar permisos
         if (!isOwner && !player.hasPermission("zadditions.chunkminer.admin")) {
             player.sendMessage("§cSolo el dueño o un administrador puede romper este Chunk Miner.");
             return;
         }
 
-        // Verificar permiso básico (esto es para los admins)
+        // No verificar zadditions.chunkminer.place para el dueño
         if (!isOwner && !player.hasPermission("zadditions.chunkminer.place")) {
             player.sendMessage("§cNo tienes permiso para usar Chunk Miners.");
             return;
         }
 
-        // Entregar el item directamente al inventario del jugador si es el dueño
-        if (isOwner) {
-            // Crear el item de ChunkMiner
-            ItemStack chunkMinerItem = ChunkMinerItem.create();
+        // Crear el item del ChunkMiner primero
+        ItemStack chunkMinerItem = ChunkMinerItem.create();
 
-            // Intentar añadir al inventario
+        // CRÍTICO: Eliminar primero el bloque físicamente antes de limpiar el miner
+        event.getBlock().setType(Material.AIR);
+
+        // Eliminar referencias al miner
+        miner.cleanup();
+        minerManager.removeMiner(event.getBlock().getLocation());
+
+        // Entregar el item
+        if (isOwner) {
+            // Añadir directamente al inventario si es posible
             HashMap<Integer, ItemStack> notAdded = player.getInventory().addItem(chunkMinerItem);
 
-            // Si no se pudo añadir al inventario (porque está lleno), soltarlo al suelo
-            if (!notAdded.isEmpty()) {
-                player.getWorld().dropItemNaturally(
-                        player.getLocation(),
-                        chunkMinerItem
-                );
-                player.sendMessage("§aTu inventario está lleno. El Chunk Miner ha sido soltado a tus pies.");
-            } else {
+            if (notAdded.isEmpty()) {
                 player.sendMessage("§aChunk Miner recuperado a tu inventario.");
+            } else {
+                // Si el inventario está lleno, soltar a los pies
+                ItemStack remaining = notAdded.get(0);
+                player.getWorld().dropItemNaturally(player.getLocation(), remaining);
+                player.sendMessage("§aTu inventario está lleno. El Chunk Miner ha sido soltado a tus pies.");
             }
         } else {
-            // Si es un admin quien lo rompe, soltar el item al suelo como antes
+            // Si es admin, soltar en la ubicación del bloque
             event.getBlock().getWorld().dropItemNaturally(
                     event.getBlock().getLocation().add(0.5, 0.5, 0.5),
-                    ChunkMinerItem.create()
+                    chunkMinerItem
             );
             player.sendMessage("§aChunk Miner removido y soltado al suelo.");
         }
-
-        // Remover el miner sin soltar item adicional
-        miner.remove(false);
-        minerManager.removeMiner(event.getBlock().getLocation());
     }
 
     @EventHandler

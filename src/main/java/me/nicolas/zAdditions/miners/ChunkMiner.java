@@ -696,6 +696,7 @@ public class ChunkMiner {
 
     public void cleanup() {
         isActive = false;
+        // Cancelar tareas programadas
         if (miningTask != null) {
             miningTask.cancel();
             miningTask = null;
@@ -705,11 +706,7 @@ public class ChunkMiner {
             optimizationTask = null;
         }
 
-        if (location.getBlock().getType() == Material.BEACON) {
-            location.getBlock().setType(Material.AIR);
-        }
-
-        // Remover hologramas de forma segura
+        // Eliminar hologramas de forma segura
         if (titleHologram != null && !titleHologram.isDead()) {
             titleHologram.remove();
         }

@@ -119,7 +119,7 @@ public class WorldGuardUtils {
             Object applicableRegions = regionManagerClass.getMethod("getApplicableRegions", vectorClass)
                     .invoke(regionManager, vector);
 
-            // Verificar si hay regiones usando getRegions() en lugar de isEmpty()
+            // Obtener colección de regiones
             Object regions = applicableRegionSetClass.getMethod("getRegions").invoke(applicableRegions);
 
             // Verificar si la colección está vacía
@@ -130,75 +130,6 @@ public class WorldGuardUtils {
         } catch (Exception e) {
             Bukkit.getLogger().warning("[ZAdditions] Error al comprobar región protegida: " + e.getMessage());
             return true; // En caso de error, considerar protegido por seguridad
-        }
-    }
-
-    /**
-     * Comprueba si un jugador es dueño de la región en una ubicación
-     * Este es el método principal para la integración con ChunkMiners
-     * @param player El jugador
-     * @param location La ubicación
-     * @return true si es dueño o si no hay región
-     */
-    public static boolean isOwner(Player player, Location location) {
-        if (!worldGuardEnabled) return true;
-
-        // Si el jugador tiene permiso para saltarse las verificaciones
-        if (player.hasPermission("zadditions.chunkminer.bypass.worldguard")) {
-            return true;
-        }
-
-        try {
-            // Convertir Bukkit World a WorldEdit World
-            Object worldEditWorld = bukitAdapterClass.getMethod("adapt", World.class)
-                    .invoke(null, location.getWorld());
-
-            // Obtener el manejador de regiones para este mundo
-            Object regionManager = regionContainerClass.getMethod("get", Class.forName("com.sk89q.worldedit.world.World"))
-                    .invoke(regionContainer, worldEditWorld);
-
-            if (regionManager == null) return true;
-
-            // Convertir la ubicación a vector
-            Object vector = vectorClass.getMethod("at", double.class, double.class, double.class)
-                    .invoke(null, location.getX(), location.getY(), location.getZ());
-
-            // Obtener regiones aplicables
-            Object applicableRegions = regionManagerClass.getMethod("getApplicableRegions", vectorClass)
-                    .invoke(regionManager, vector);
-
-            // Obtener colección de regiones
-            Object regions = applicableRegionSetClass.getMethod("getRegions").invoke(applicableRegions);
-
-            // Si no hay regiones, se permite
-            if (regions instanceof Collection) {
-                Collection<?> regionCollection = (Collection<?>) regions;
-
-                if (regionCollection.isEmpty()) {
-                    return true;
-                }
-
-                // Obtener LocalPlayer
-                Object localPlayer = worldGuardPluginClass.getMethod("wrapPlayer", Player.class)
-                        .invoke(worldGuardPlugin, player);
-
-                // Verificar si es dueño en todas las regiones
-                for (Object region : regionCollection) {
-                    // Verificar si el jugador es dueño de la región
-                    Boolean isOwner = (Boolean) protectedRegionClass.getMethod("isOwner", localPlayerClass)
-                            .invoke(region, localPlayer);
-
-                    if (!isOwner) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-
-            return false;
-        } catch (Exception e) {
-            Bukkit.getLogger().log(Level.WARNING, "[ZAdditions] Error al comprobar propiedad de región: " + e.getMessage(), e);
-            return false; // En caso de error, no permitir
         }
     }
 
@@ -241,6 +172,80 @@ public class WorldGuardUtils {
         } catch (Exception e) {
             Bukkit.getLogger().warning("[ZAdditions] Error al comprobar región global: " + e.getMessage());
             return false; // En caso de error, no considerar como región global por seguridad
+        }
+    }
+
+    /**
+     * Comprueba si un jugador es dueño de la región en una ubicación
+     * Este es el método principal para la integración con ChunkMiners
+     * @param player El jugador
+     * @param location La ubicación
+     * @return true si es dueño o si no hay región
+     */
+    public static boolean isOwner(Player player, Location location) {
+        if (!worldGuardEnabled) return true;
+
+        // Si el jugador tiene permiso para saltarse las verificaciones
+        if (player.hasPermission("zadditions.chunkminer.bypass.worldguard")) {
+            return true;
+        }
+
+        try {
+            // Si está en región global, siempre permitir
+            if (isInGlobalRegion(location.getBlock())) {
+                return true;
+            }
+
+            // Convertir Bukkit World a WorldEdit World
+            Object worldEditWorld = bukitAdapterClass.getMethod("adapt", World.class)
+                    .invoke(null, location.getWorld());
+
+            // Obtener el manejador de regiones para este mundo
+            Object regionManager = regionContainerClass.getMethod("get", Class.forName("com.sk89q.worldedit.world.World"))
+                    .invoke(regionContainer, worldEditWorld);
+
+            if (regionManager == null) return true;
+
+            // Convertir la ubicación a vector
+            Object vector = vectorClass.getMethod("at", double.class, double.class, double.class)
+                    .invoke(null, location.getX(), location.getY(), location.getZ());
+
+            // Obtener regiones aplicables
+            Object applicableRegions = regionManagerClass.getMethod("getApplicableRegions", vectorClass)
+                    .invoke(regionManager, vector);
+
+            // Obtener colección de regiones
+            Object regions = applicableRegionSetClass.getMethod("getRegions").invoke(applicableRegions);
+
+            // Obtener LocalPlayer
+            Object localPlayer = worldGuardPluginClass.getMethod("wrapPlayer", Player.class)
+                    .invoke(worldGuardPlugin, player);
+
+            // Verificar si es dueño en todas las regiones
+            if (regions instanceof Collection) {
+                Collection<?> regionCollection = (Collection<?>) regions;
+
+                if (regionCollection.isEmpty()) {
+                    return true;
+                }
+
+                // Verificar cada región
+                for (Object region : regionCollection) {
+                    // Verificar si el jugador es dueño de la región
+                    Boolean isOwner = (Boolean) protectedRegionClass.getMethod("isOwner", localPlayerClass)
+                            .invoke(region, localPlayer);
+
+                    if (!isOwner) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            return false;
+        } catch (Exception e) {
+            Bukkit.getLogger().log(Level.WARNING, "[ZAdditions] Error al comprobar propiedad de región: " + e.getMessage(), e);
+            return false; // En caso de error, no permitir
         }
     }
 }

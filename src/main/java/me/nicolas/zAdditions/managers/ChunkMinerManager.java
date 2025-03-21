@@ -222,14 +222,23 @@ public class ChunkMinerManager implements Listener {
     public void removeMiner(Location location) {
         ChunkMiner miner = miners.remove(location);
         if (miner != null) {
-            miner.remove(true);
+            // No llamamos a miner.remove() aquí para evitar problemas
+            // Solo actualizamos los contadores internos
             minersPerWorld.merge(location.getWorld(), -1, Integer::sum);
+
             // Decrementar contador del jugador
             UUID ownerUUID = miner.getOwnerUUID();
             minersPerPlayer.merge(ownerUUID, -1, Integer::sum);
             if (minersPerPlayer.get(ownerUUID) <= 0) {
                 minersPerPlayer.remove(ownerUUID);
             }
+
+            // Registramos este cambio
+            plugin.getLogger().info("ChunkMiner removido de la ubicación: " +
+                    location.getWorld().getName() + "," +
+                    location.getBlockX() + "," +
+                    location.getBlockY() + "," +
+                    location.getBlockZ());
         }
     }
 
